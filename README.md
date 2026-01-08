@@ -31,13 +31,13 @@ Easy Panel es una plataforma de hosting que facilita el despliegue de aplicacion
    - **Dockerfile Path:** `./Dockerfile`
    - **Port:** `80`
 
-3. **Build Arguments (⚠️ IMPORTANTE):**
-   En la sección de **Build** de Easy Panel, configura el siguiente **Build Argument**:
+3. **Variables de entorno:**
+   En la sección de **Environment** de Easy Panel, agrega:
    ```
    GEMINI_API_KEY=tu_api_key_aqui
    ```
 
-   **Nota:** Debe ser un Build Argument, NO una variable de entorno. La API key se necesita durante la compilación.
+   ✅ Simplemente agrega la variable en "Environment Variables" - ¡Así de fácil!
 
 4. **Construir y desplegar:**
    - Haz clic en "Deploy"
@@ -71,11 +71,11 @@ docker-compose up --build
 ### Usando Docker directamente
 
 ```bash
-# Construir la imagen con tu API key
-docker build --build-arg GEMINI_API_KEY=tu_api_key_aqui -t transcribir .
+# Construir la imagen
+docker build -t transcribir .
 
-# Ejecutar el contenedor
-docker run -p 80:80 transcribir
+# Ejecutar el contenedor con tu API key
+docker run -p 80:80 -e GEMINI_API_KEY=tu_api_key_aqui transcribir
 
 # La aplicación estará disponible en http://localhost
 ```

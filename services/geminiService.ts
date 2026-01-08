@@ -1,8 +1,13 @@
 
 import { GoogleGenAI } from "@google/genai";
 
+// Get API key from window.env (runtime config) or fallback to build-time env
+const getApiKey = () => {
+  return (window as any).env?.GEMINI_API_KEY || process.env.API_KEY || process.env.GEMINI_API_KEY;
+};
+
 export async function transcribeAudio(audioBase64: string): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
