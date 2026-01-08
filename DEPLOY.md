@@ -61,19 +61,28 @@ Si quieres usar un dominio personalizado:
 2. Agrega tu dominio
 3. Configura los DNS según las instrucciones de Easy Panel
 
-### 5. Variables de Entorno
+### 5. Variables de Entorno y Build Arguments
 
-⚠️ **IMPORTANTE:** Agrega la siguiente variable de entorno:
+⚠️ **IMPORTANTE:** Debes configurar la API key como Build Argument (no como variable de entorno).
+
+En Easy Panel, ve a la sección de **Build** y agrega el siguiente **Build Argument**:
 
 ```
 GEMINI_API_KEY=tu_api_key_aqui
 ```
 
+**Importante:** Easy Panel tiene dos lugares para configurar variables:
+- **Environment Variables** (❌ NO uses este para la API key)
+- **Build Arguments** (✅ USA ESTE para GEMINI_API_KEY)
+
 **Cómo obtener la API Key:**
 1. Ve a https://aistudio.google.com/app/apikey
 2. Inicia sesión con tu cuenta de Google
 3. Crea una nueva API key
-4. Cópiala y pégala en Easy Panel
+4. Cópiala y agrégala como **Build Argument** en Easy Panel
+
+**¿Por qué Build Argument?**
+La aplicación usa Vite que incluye las variables de entorno en el bundle durante el build. Por eso necesita estar disponible en tiempo de compilación, no de ejecución.
 
 ### 6. Recursos (Opcional)
 
@@ -172,12 +181,14 @@ Deberías ver: `healthy`
 
 ### Variables de entorno no funcionan
 
-**Problema:** La API de Gemini no responde
+**Problema:** La API de Gemini no responde o el build falla
 
 **Solución:**
-1. Verifica que `GEMINI_API_KEY` esté configurada en Easy Panel
-2. Recuerda que las variables se inyectan en build time
-3. Si cambias una variable, necesitas hacer un nuevo deploy
+1. ⚠️ **MUY IMPORTANTE:** La `GEMINI_API_KEY` debe estar configurada como **Build Argument**, NO como variable de entorno
+2. Ve a la configuración de Build en Easy Panel
+3. Busca la sección "Build Arguments" o "Build Args"
+4. Agrega: `GEMINI_API_KEY=tu_api_key_aqui`
+5. Si cambias un build argument, necesitas hacer un rebuild completo
 
 ### Rebuild manual
 

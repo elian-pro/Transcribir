@@ -31,11 +31,13 @@ Easy Panel es una plataforma de hosting que facilita el despliegue de aplicacion
    - **Dockerfile Path:** `./Dockerfile`
    - **Port:** `80`
 
-3. **Variables de entorno:**
-   Configura las siguientes variables en Easy Panel:
+3. **Build Arguments (⚠️ IMPORTANTE):**
+   En la sección de **Build** de Easy Panel, configura el siguiente **Build Argument**:
    ```
    GEMINI_API_KEY=tu_api_key_aqui
    ```
+
+   **Nota:** Debe ser un Build Argument, NO una variable de entorno. La API key se necesita durante la compilación.
 
 4. **Construir y desplegar:**
    - Haz clic en "Deploy"
@@ -57,12 +59,10 @@ Easy Panel es una plataforma de hosting que facilita el despliegue de aplicacion
 git clone https://github.com/elian-pro/Transcribir.git
 cd Transcribir
 
-# 2. Copia el archivo de ejemplo de variables de entorno
-cp .env.example .env.local
+# 2. Crea un archivo .env con tu API key
+echo "GEMINI_API_KEY=tu_api_key_aqui" > .env
 
-# 3. Edita .env.local y agrega tu GEMINI_API_KEY
-
-# 4. Construye y ejecuta con Docker Compose
+# 3. Construye y ejecuta con Docker Compose
 docker-compose up --build
 
 # La aplicación estará disponible en http://localhost
@@ -71,8 +71,8 @@ docker-compose up --build
 ### Usando Docker directamente
 
 ```bash
-# Construir la imagen
-docker build -t transcribir .
+# Construir la imagen con tu API key
+docker build --build-arg GEMINI_API_KEY=tu_api_key_aqui -t transcribir .
 
 # Ejecutar el contenedor
 docker run -p 80:80 transcribir
