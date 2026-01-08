@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Video Transcriber Pro",
+  "description": "A high-performance tool that extracts audio from MP4 videos and uses Gemini AI to provide accurate transcriptions instantly.",
+  "requestFramePermissions": []
+}
