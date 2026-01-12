@@ -25,7 +25,7 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [apiKey, setApiKey] = useState('');
   const [showKeyInput, setShowKeyInput] = useState(true);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Cargar API Key del entorno o localStorage al inicio
