@@ -28,8 +28,17 @@ export default function App() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Cargar API Key de localStorage al inicio
+  // Cargar API Key del entorno o localStorage al inicio
   useEffect(() => {
+    // Primero verificar si hay una API_KEY del entorno (configurada en Easy Panel)
+    const envKey = process.env.API_KEY;
+    if (envKey) {
+      setApiKey(envKey);
+      setShowKeyInput(false);
+      return;
+    }
+
+    // Si no hay en el entorno, verificar localStorage
     const savedKey = localStorage.getItem('GEMINI_API_KEY');
     if (savedKey) {
       setApiKey(savedKey);
