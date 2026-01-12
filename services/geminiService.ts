@@ -1,8 +1,8 @@
-
 import { GoogleGenAI } from "@google/genai";
 
-export async function transcribeAudio(audioBase64: string): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export async function transcribeAudio(audioBase64: string, apiKey: string): Promise<string> {
+  // Inicializamos con la clave proporcionada por el usuario o la de sistema
+  const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY || '' });
   
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -20,7 +20,7 @@ export async function transcribeAudio(audioBase64: string): Promise<string> {
       ],
     },
     config: {
-      temperature: 0.1, // Lower temperature for more accurate transcription
+      temperature: 0.1,
     }
   });
 
