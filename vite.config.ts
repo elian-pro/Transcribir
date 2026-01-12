@@ -7,7 +7,7 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
   },
-  // Inyectamos la API_KEY que viene del entorno de construcción (Docker/EasyPanel)
+  // Esto permite que el código cliente acceda a process.env.API_KEY durante el build
   define: {
     'process.env.API_KEY': JSON.stringify(process.env.API_KEY || '')
   }
