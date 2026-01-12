@@ -1,20 +1,21 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# Video Transcriber Pro
 
-This contains everything you need to run your app locally.
+Esta herramienta permite extraer el audio de archivos MP4 y generar transcripciones automáticas utilizando la API de Gemini.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1HMsBGc-pyPFwt6n7_hNyfood1DdwHIwb
+## Despliegue en EasyPanel
 
-## Run Locally
+1. Crea un nuevo proyecto en tu EasyPanel.
+2. Selecciona **Git Repository** y pega la URL de tu repositorio de GitHub.
+3. En la sección de **Environment Variables** (Variables de Entorno), añade:
+   - `API_KEY`: Tu clave de Google AI Studio.
+4. EasyPanel detectará el `Dockerfile` y desplegará la aplicación automáticamente.
 
-**Prerequisites:**  Node.js
+## Desarrollo Local
 
+```bash
+npm install
+npm run dev
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Recuerda configurar tu `API_KEY` en un archivo `.env` o como variable de entorno.
