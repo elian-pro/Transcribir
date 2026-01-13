@@ -48,14 +48,14 @@ export default function App() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile && selectedFile.type.startsWith('video/')) {
+    if (selectedFile && (selectedFile.type.startsWith('video/') || selectedFile.type.startsWith('audio/'))) {
       setFile(selectedFile);
       setResult(null);
       setError(null);
       setStatus(AppStatus.IDLE);
       setProgress(0);
     } else if (selectedFile) {
-      setError("Por favor, selecciona un archivo de vídeo válido (MP4, MOV, etc).");
+      setError("Por favor, selecciona un archivo de vídeo o audio válido (MP4, MP3, WAV, etc).");
     }
   };
 
@@ -125,13 +125,13 @@ export default function App() {
 
       <header className="w-full max-w-4xl mb-12 text-center pt-8">
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-full text-blue-600 text-sm font-medium mb-6">
-          <Zap size={14} /> AI Video Transcriber
+          <Zap size={14} /> AI Audio & Video Transcriber
         </div>
         <h1 className="text-5xl md:text-6xl font-black mb-4 tracking-tight bg-gradient-to-b from-black to-slate-600 bg-clip-text text-transparent">
-          Video a Texto
+          Audio y Video a Texto
         </h1>
         <p className="text-slate-600 text-lg max-w-xl mx-auto mb-8 leading-relaxed">
-          Sube tu vídeo, extrae el audio y transcribe con inteligencia artificial.
+          Sube tu vídeo o audio (MP3, MP4, WAV, etc.) y transcribe con inteligencia artificial.
         </p>
 
         {/* API Key Management UI */}
@@ -200,14 +200,14 @@ export default function App() {
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileChange}
-                accept="video/*"
+                accept="video/*,audio/*"
                 className="hidden"
               />
 
               {!file ? (
                 <>
-                  <h2 className="text-2xl font-bold mb-2 text-black">Selecciona un vídeo</h2>
-                  <p className="text-slate-500 mb-8">El audio será procesado localmente en tu navegador</p>
+                  <h2 className="text-2xl font-bold mb-2 text-black">Selecciona un archivo</h2>
+                  <p className="text-slate-500 mb-8">Soporta video (MP4, MOV) y audio (MP3, WAV, etc.)</p>
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="px-8 py-4 bg-black text-white rounded-2xl font-bold hover:bg-slate-800 transition-all active:scale-95"
@@ -293,7 +293,7 @@ export default function App() {
 
       <footer className="w-full max-w-4xl py-10 text-center border-t border-slate-200 mt-12">
         <p className="text-slate-400 text-xs font-medium uppercase tracking-widest">
-          Video Transcriber &bull; Sin servidores intermedios &bull; 100% Privado
+          Audio & Video Transcriber &bull; Sin servidores intermedios &bull; 100% Privado
         </p>
       </footer>
     </div>

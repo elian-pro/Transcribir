@@ -1,7 +1,7 @@
 
 /**
- * Converts a Video File to a Base64 encoded WAV audio string.
- * This satisfies the "transform to mp3/audio" part of the requirement using browser-native APIs.
+ * Converts a Video or Audio File to a Base64 encoded WAV audio string.
+ * Supports video formats (MP4, MOV, etc.) and audio formats (MP3, WAV, etc.)
  */
 export async function extractAudioFromVideo(file: File): Promise<{ base64: string; duration: number }> {
   const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
