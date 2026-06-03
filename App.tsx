@@ -84,10 +84,10 @@ export default function App() {
         setProgress(prev => (prev < 90 ? prev + 5 : prev));
       }, 800);
 
-      const { base64, duration } = await extractAudioFromVideo(file);
-      
+      const { blob, duration } = await extractAudioFromVideo(file);
+
       setStatus(AppStatus.TRANSCRIBING);
-      const text = await transcribeAudio(base64, apiKey);
+      const text = await transcribeAudio(blob, apiKey);
       
       clearInterval(progressInterval);
       setProgress(100);
