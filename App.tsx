@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   FileVideo,
   Upload,
@@ -7,13 +7,41 @@ import {
   AlertCircle,
   Copy,
   ArrowRight,
-  RefreshCw
+  RefreshCw,
+  LogOut,
+  ShieldAlert
 } from 'lucide-react';
 import { extractAudioFromVideo } from './services/audioService';
 import { transcribeAudio } from './services/geminiService';
 import { AppStatus, TranscriptionResult } from './types';
 
+const ALLOWED_DOMAIN = 'zebradigital.marketing';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const USER_STORAGE_KEY = 'ZEBRA_USER';
+
+interface AuthUser {
+  email: string;
+  name?: string;
+  picture?: string;
+}
+
+// Decodifica el payload de un JWT (sin verificar firma: es una puerta de UI, no seguridad de servidor)
+function decodeJwt(token: string): any {
+  const part = token.split('.')[1];
+  const base64 = part.replace(/-/g, '+').replace(/_/g, '/');
+  const json = decodeURIComponent(
+    atob(base64)
+      .split('')
+      .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+      .join('')
+  );
+  return JSON.parse(json);
+}
+
 export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
   const [result, setResult] = useState<TranscriptionResult | null>(null);
@@ -23,6 +51,7 @@ export default function App() {
   const [copied, setCopied] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const googleBtnRef = useRef<HTMLDivElement>(null);
 
   // La API Key siempre viene del entorno (Easy Panel). Como respaldo, localStorage.
   useEffect(() => {
@@ -34,6 +63,85 @@ export default function App() {
     const savedKey = localStorage.getItem('GEMINI_API_KEY');
     if (savedKey) setApiKey(savedKey);
   }, []);
+
+  // Restaurar sesión previa
+  useEffect(() => {
+    const saved = localStorage.getItem(USER_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed: AuthUser = JSON.parse(saved);
+        if (parsed.email && parsed.email.toLowerCase().endsWith('@' + ALLOWED_DOMAIN)) {
+          setUser(parsed);
+        }
+      } catch {
+        /* noop */
+      }
+    }
+  }, []);
+
+  const handleCredential = useCallback((response: any) => {
+    try {
+      const payload = decodeJwt(response.credential);
+      const email: string = (payload.email || '').toLowerCase();
+      const domainOk =
+        email.endsWith('@' + ALLOWED_DOMAIN) || payload.hd === ALLOWED_DOMAIN;
+
+      if (!payload.email_verified || !domainOk) {
+        setAuthError(`Acceso restringido a cuentas @${ALLOWED_DOMAIN}.`);
+        (window as any).google?.accounts.id.disableAutoSelect();
+        return;
+      }
+
+      const authed: AuthUser = { email, name: payload.name, picture: payload.picture };
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authed));
+      setAuthError(null);
+      setUser(authed);
+    } catch {
+      setAuthError('No se pudo validar el inicio de sesión. Intenta de nuevo.');
+    }
+  }, []);
+
+  // Inicializar el botón de Google cuando no hay sesión
+  useEffect(() => {
+    if (user || !GOOGLE_CLIENT_ID) return;
+
+    let cancelled = false;
+    const tryInit = () => {
+      const google = (window as any).google;
+      if (cancelled) return;
+      if (!google?.accounts?.id) {
+        setTimeout(tryInit, 200);
+        return;
+      }
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleCredential,
+        hd: ALLOWED_DOMAIN,
+        auto_select: false
+      });
+      if (googleBtnRef.current) {
+        googleBtnRef.current.innerHTML = '';
+        google.accounts.id.renderButton(googleBtnRef.current, {
+          theme: 'filled_black',
+          size: 'large',
+          shape: 'pill',
+          text: 'continue_with',
+          width: 280
+        });
+      }
+    };
+    tryInit();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, handleCredential]);
+
+  const logout = () => {
+    localStorage.removeItem(USER_STORAGE_KEY);
+    (window as any).google?.accounts.id.disableAutoSelect();
+    setUser(null);
+    reset();
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -99,12 +207,72 @@ export default function App() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  // ------- PANTALLA DE LOGIN -------
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col bg-black text-white selection:bg-zebra selection:text-black">
+        <div className="w-full bg-white">
+          <div className="max-w-5xl mx-auto px-6 md:px-10 py-5 flex items-center justify-center">
+            <img src="/LOGO.png" alt="Logo" className="h-9 md:h-11 w-auto" />
+          </div>
+        </div>
+
+        <div className="flex-grow flex items-center justify-center px-6 py-16">
+          <div className="w-full max-w-md text-center">
+            <p className="label mb-6">Acceso privado</p>
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight leading-[0.95] mb-4">
+              Inicia sesión.
+            </h1>
+            <p className="text-neutral-400 text-lg mb-10 leading-relaxed">
+              Solo cuentas <span className="text-white font-semibold">@{ALLOWED_DOMAIN}</span> pueden usar el transcriptor.
+            </p>
+
+            {GOOGLE_CLIENT_ID ? (
+              <div className="flex flex-col items-center gap-5">
+                <div ref={googleBtnRef} className="min-h-[44px] flex items-center justify-center" />
+                {authError && (
+                  <div className="flex items-center gap-2 text-red-400 text-sm font-semibold">
+                    <ShieldAlert size={16} /> {authError}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="border-2 border-red-500/30 rounded-2xl p-6 text-left">
+                <div className="flex items-center gap-2 text-red-400 font-bold mb-2">
+                  <AlertCircle size={18} /> Falta configuración
+                </div>
+                <p className="text-neutral-400 text-sm leading-relaxed">
+                  No se ha definido <code className="text-white">GOOGLE_CLIENT_ID</code> en el entorno.
+                  Añádelo en Easy Panel y vuelve a desplegar.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <footer className="w-full border-t border-white/10">
+          <div className="max-w-5xl mx-auto px-6 md:px-10 py-8 text-center">
+            <span className="label">Sin servidores · 100% privado</span>
+          </div>
+        </footer>
+      </div>
+    );
+  }
+
+  // ------- APP -------
   return (
     <div className="min-h-screen flex flex-col bg-black text-white selection:bg-zebra selection:text-black">
       {/* Franja blanca para el logo negro */}
       <div className="w-full bg-white">
-        <div className="max-w-5xl mx-auto px-6 md:px-10 py-5 flex items-center justify-center">
+        <div className="max-w-5xl mx-auto px-6 md:px-10 py-5 flex items-center justify-between gap-4">
+          <span className="hidden sm:block text-xs font-semibold text-neutral-500 truncate max-w-[40%]">{user.email}</span>
           <img src="/LOGO.png" alt="Logo" className="h-9 md:h-11 w-auto" />
+          <button
+            onClick={logout}
+            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-neutral-500 hover:text-black transition-colors"
+          >
+            <LogOut size={14} /> Salir
+          </button>
         </div>
       </div>
 
