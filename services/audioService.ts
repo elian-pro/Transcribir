@@ -1,41 +1,58 @@
 
 /**
- * Converts a Video or Audio File to a Base64 encoded WAV audio string.
+ * Converts a Video or Audio File to a compact WAV Blob (mono, 16 kHz).
+ *
+ * Gemini recomienda audio mono a 16 kHz. Re-muestrear a este formato reduce
+ * el tamaño del audio ~6-12x respecto al original (estéreo 44/48 kHz), lo que
+ * evita reventar la memoria del navegador y permite enviar archivos largos.
+ *
  * Supports video formats (MP4, MOV, etc.) and audio formats (MP3, WAV, etc.)
  */
-export async function extractAudioFromVideo(file: File): Promise<{ base64: string; duration: number }> {
+export async function extractAudioFromVideo(file: File): Promise<{ blob: Blob; duration: number }> {
+  const TARGET_SAMPLE_RATE = 16000; // 16 kHz, recomendado por Gemini
+  const TARGET_CHANNELS = 1; // mono
+
   const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const arrayBuffer = await file.arrayBuffer();
-  
-  // Decode the video file to get audio data
-  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-  const duration = audioBuffer.duration;
 
-  // We'll create a simple WAV blob to send to Gemini
-  const wavBlob = await audioBufferToWav(audioBuffer);
-  const base64 = await blobToBase64(wavBlob);
-  
-  return { base64, duration };
-}
+  let decoded: AudioBuffer;
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    // Decode the video/audio file to get raw audio data
+    decoded = await audioContext.decodeAudioData(arrayBuffer);
+  } catch (err) {
+    await audioContext.close().catch(() => {});
+    throw new Error(
+      "No se pudo leer el audio del archivo. Si es muy grande (varios GB) puede agotar la memoria del navegador; intenta comprimirlo o recortarlo antes de subirlo."
+    );
+  }
 
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result as string;
-      // Remove the prefix (e.g., "data:audio/wav;base64,")
-      const base64Data = result.split(',')[1];
-      resolve(base64Data);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+  const duration = decoded.duration;
+  await audioContext.close().catch(() => {});
+
+  // Re-muestrear a mono 16 kHz usando un contexto offline.
+  const offline = new OfflineAudioContext(
+    TARGET_CHANNELS,
+    Math.max(1, Math.ceil(duration * TARGET_SAMPLE_RATE)),
+    TARGET_SAMPLE_RATE
+  );
+  const source = offline.createBufferSource();
+  source.buffer = decoded;
+  source.connect(offline.destination);
+  source.start();
+  const rendered = await offline.startRendering();
+
+  // Liberar el buffer original cuanto antes
+  (decoded as any) = null;
+
+  const wavBlob = audioBufferToWav(rendered);
+
+  return { blob: wavBlob, duration };
 }
 
 /**
- * A simple helper to convert AudioBuffer to WAV format
+ * A simple helper to convert AudioBuffer to WAV format (16-bit PCM).
  */
-async function audioBufferToWav(buffer: AudioBuffer): Promise<Blob> {
+function audioBufferToWav(buffer: AudioBuffer): Blob {
   const numOfChan = buffer.numberOfChannels;
   const length = buffer.length * numOfChan * 2 + 44;
   const bufferArray = new ArrayBuffer(length);
