@@ -15,8 +15,16 @@ export interface Segment {
   text: string;
 }
 
+export interface Summary {
+  summary: string;
+  keyPoints: string[];
+}
+
 export interface TranscriptionResult {
   segments: Segment[];
+  /** Traducciones ya generadas, por código de idioma; conservan los tiempos. */
+  translations?: Record<string, Segment[]>;
+  summary?: Summary;
   /** Texto plano derivado de los segmentos. */
   text: string;
   duration: number;

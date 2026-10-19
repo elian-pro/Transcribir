@@ -1,4 +1,4 @@
-import { GoogleGenAI, FinishReason, ThinkingLevel, Type, createUserContent, createPartFromUri } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse, FinishReason, ThinkingLevel, Type, createUserContent, createPartFromUri } from "@google/genai";
 import { Segment } from "../types";
 import { parseTimestamp } from "./formatService";
 
@@ -6,7 +6,7 @@ import { parseTimestamp } from "./formatService";
 // el audio un 33%, así que por encima de ~14 MB de WAV hay que usar la Files API.
 const INLINE_LIMIT_BYTES = 14 * 1024 * 1024; // 14 MB
 
-const MODEL = 'gemini-3-flash-preview';
+export const MODEL = 'gemini-3-flash-preview';
 
 // Ritmo de habla muy rápido (~250 palabras/min) más margen. Si el texto supera este
 // ritmo para la duración del audio, el modelo casi seguro inventó contenido.
@@ -50,6 +50,28 @@ const USER_PROMPT = 'Transcribe este audio siguiendo las reglas.';
 
 const HTML_TAG_RE = /<\/?(p|h[1-6]|ol|ul|li|div|span|br|strong|em|article|section)\b[^>]*>/i;
 const MARKDOWN_RE = /(^#{1,6}\s)|(\*\*[^*\n]+\*\*)|(^```)/m;
+
+/** true si el texto trae HTML o Markdown, señal de que el modelo generó un artículo. */
+export function looksFormatted(text: string): boolean {
+  return HTML_TAG_RE.test(text) || MARKDOWN_RE.test(text);
+}
+
+/**
+ * Lanza un error claro si Gemini bloqueó la petición o no terminó de responder.
+ * `what` nombra la tarea en el mensaje ("la transcripción", "la traducción"...).
+ */
+export function assertComplete(response: GenerateContentResponse, what: string, tooLongMessage: string): void {
+  if (response.promptFeedback?.blockReason) {
+    throw new Error(`Gemini bloqueó ${what}. Prueba con otro archivo.`);
+  }
+  const finishReason = response.candidates?.[0]?.finishReason;
+  if (finishReason === FinishReason.MAX_TOKENS) {
+    throw new Error(tooLongMessage);
+  }
+  if (finishReason && finishReason !== FinishReason.STOP) {
+    throw new Error(`Gemini detuvo ${what} antes de terminar (${finishReason}). Intenta de nuevo.`);
+  }
+}
 
 export async function transcribeAudio(audioBlob: Blob, duration: number, apiKey: string): Promise<Segment[]> {
   const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY || '' });
@@ -101,17 +123,7 @@ export async function transcribeAudio(audioBlob: Blob, duration: number, apiKey:
     },
   });
 
-  if (response.promptFeedback?.blockReason) {
-    throw new Error('Gemini bloqueó el archivo y no lo transcribió. Prueba con otro archivo.');
-  }
-
-  const finishReason = response.candidates?.[0]?.finishReason;
-  if (finishReason === FinishReason.MAX_TOKENS) {
-    throw new Error('La transcripción quedó incompleta porque el audio es demasiado largo. Divide el archivo en partes más cortas.');
-  }
-  if (finishReason && finishReason !== FinishReason.STOP) {
-    throw new Error(`Gemini detuvo la transcripción antes de terminar (${finishReason}). Intenta de nuevo.`);
-  }
+  assertComplete(response, 'la transcripción', 'La transcripción quedó incompleta porque el audio es demasiado largo. Divide el archivo en partes más cortas.');
 
   return parseAndValidate(response.text || '', duration);
 }
@@ -153,7 +165,7 @@ function parseAndValidate(raw: string, duration: number): Segment[] {
 
   const fullText = segments.map((s) => s.text).join(' ');
 
-  if (HTML_TAG_RE.test(fullText) || MARKDOWN_RE.test(fullText)) {
+  if (looksFormatted(fullText)) {
     throw new Error('La respuesta no parece una transcripción (llegó con formato de artículo). Intenta de nuevo; si se repite, el audio puede no tener voz clara.');
   }
 

@@ -225,6 +225,10 @@ export default function App() {
 
           <div className="lg:col-span-7">
             <ResultPanel
+              // key: cada archivo abre el panel con su propio estado (pestaña, idioma, errores).
+              key={selected?.id ?? 'none'}
+              onTranslate={(language) => (selected ? queue.translate(selected, language) : Promise.resolve())}
+              onSummarize={() => (selected ? queue.summarize(selected) : Promise.resolve())}
               status={selected ? STATUS_FOR_PANEL[selected.status] : AppStatus.IDLE}
               result={selected?.result ?? null}
               error={selected?.error ?? null}

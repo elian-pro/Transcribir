@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { QueueItem } from '../types';
+import { QueueItem, TranscriptionResult } from '../types';
 import { extractAudioFromVideo } from '../services/audioService';
 import { transcribeAudio } from '../services/geminiService';
 import { toPlainText } from '../services/formatService';
+import { LanguageCode, summarize, translateSegments } from '../services/aiToolsService';
 
 function newId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -101,7 +102,23 @@ export function useQueue(apiKey: string) {
     setSelectedId(null);
   }, []);
 
+  /** Mezcla datos nuevos (traducción, resumen) en el resultado de un archivo ya transcrito. */
+  const patchResult = (id: string, patch: (r: TranscriptionResult) => Partial<TranscriptionResult>) =>
+    setItems((prev) => prev.map((i) => (i.id === id && i.result ? { ...i, result: { ...i.result, ...patch(i.result) } } : i)));
+
+  const translate = async (item: QueueItem, language: LanguageCode) => {
+    if (!item.result) return;
+    const translated = await translateSegments(item.result.segments, language, apiKey);
+    patchResult(item.id, (r) => ({ translations: { ...r.translations, [language]: translated } }));
+  };
+
+  const summarizeItem = async (item: QueueItem) => {
+    if (!item.result) return;
+    const summary = await summarize(item.result.text, apiKey);
+    patchResult(item.id, () => ({ summary }));
+  };
+
   const selected = items.find((i) => i.id === selectedId) ?? null;
 
-  return { items, selected, select: setSelectedId, add, remove, retry, clearFinished, reset };
+  return { items, selected, select: setSelectedId, add, remove, retry, clearFinished, reset, translate, summarize: summarizeItem };
 }
