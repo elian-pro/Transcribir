@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
 
-export const MAX_FILE_BYTES = 500 * 1024 * 1024; // 500 MB
 const ACCEPTED_EXTENSIONS = /\.(mp4|mov|m4v|webm|mkv|mp3|wav|m4a|aac|ogg|flac)$/i;
 
 interface DropZoneProps {
@@ -14,7 +13,6 @@ interface DropZoneProps {
 function validate(file: File): string | null {
   const typeOk = file.type.startsWith('video/') || file.type.startsWith('audio/') || ACCEPTED_EXTENSIONS.test(file.name);
   if (!typeOk) return 'Ese archivo no es de audio ni de video. Usa MP4, MOV, MP3, WAV, M4A o AAC.';
-  if (file.size > MAX_FILE_BYTES) return 'El archivo pasa de 500 MB. Comprímelo o recórtalo antes de subirlo.';
   return null;
 }
 
@@ -82,7 +80,7 @@ export default function DropZone({ disabled, onFiles, onInvalid }: DropZoneProps
       <p className="text-base font-medium text-fg mb-1">
         Arrastra tus archivos o <span className="underline underline-offset-4">examinar</span>
       </p>
-      <p className="text-sm text-muted">MP4, MOV, MP3, WAV, M4A, AAC (máx. 500 MB por archivo)</p>
+      <p className="text-sm text-muted">MP4, MOV, MP3, WAV, M4A, AAC</p>
     </div>
   );
 }
