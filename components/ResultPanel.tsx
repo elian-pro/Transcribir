@@ -97,10 +97,10 @@ export default function ResultPanel({ status, result, error, onRetry, onTranslat
   const name = result ? `${baseName(result.fileName)}${view === 'original' ? '' : `-${view}`}` : 'transcripcion';
 
   return (
-    <div className="rounded-card bg-surface border border-line shadow-card flex flex-col min-h-[360px] lg:min-h-[580px]">
+    <div className="theme-light rounded-card bg-surface border border-line shadow-card flex flex-col min-h-[360px] lg:min-h-[580px]">
       {/* Pestañas y acciones */}
       <div className="px-4 py-3 border-b border-line flex flex-wrap items-center justify-between gap-3">
-        <div role="tablist" className="flex w-full sm:w-auto items-center gap-1 bg-surface-2 border border-line p-0.5 rounded-control">
+        <div role="tablist" data-ds-theme="dark" className="flex w-full sm:w-auto items-center gap-1 bg-surface-2 border border-line p-0.5 rounded-control">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -117,22 +117,22 @@ export default function ResultPanel({ status, result, error, onRetry, onTranslat
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={copy} disabled={!done || !views?.[tab]} className={`${toolBtn} border border-line text-fg hover:border-line-strong hover:bg-surface-2`}>
+        <div data-ds-theme="dark" className="flex items-center gap-2">
+          <button onClick={copy} disabled={!done || !views?.[tab]} className={`${toolBtn} bg-surface border border-line text-fg hover:border-line-strong hover:bg-surface-2`}>
             {copied ? <Check strokeWidth={1.75} size={16} /> : <Copy strokeWidth={1.5} size={16} />}
             {copied ? 'Copiado' : 'Copiar'}
           </button>
           <button
             onClick={() => views && downloadText(views.text, `${name}.txt`)}
             disabled={!done}
-            className={`${toolBtn} border border-line text-fg hover:border-line-strong hover:bg-surface-2`}
+            className={`${toolBtn} bg-surface border border-line text-fg hover:border-line-strong hover:bg-surface-2`}
           >
             <FileText strokeWidth={1.5} size={16} /> .TXT
           </button>
           <button
             onClick={() => views && downloadText(views.srt, `${name}.srt`)}
             disabled={!done}
-            className={`${toolBtn} bg-accent text-on-accent hover:opacity-90`}
+            className={`${toolBtn} edge-on-light bg-accent text-on-accent hover:opacity-90`}
           >
             <Download strokeWidth={1.5} size={16} /> <span className="hidden sm:inline">Exportar</span> .SRT
           </button>
@@ -195,7 +195,7 @@ export default function ResultPanel({ status, result, error, onRetry, onTranslat
             <AlertCircle strokeWidth={1.5} size={28} className="text-danger" />
             <p className="text-xl font-semibold tracking-tight">Algo salió mal.</p>
             <p className="text-sm text-muted max-w-md">{error}</p>
-            <button onClick={onRetry} className={`${toolBtn} border border-line text-fg hover:border-line-strong hover:bg-surface-2`}>
+            <button onClick={onRetry} data-ds-theme="dark" className={`${toolBtn} bg-surface border border-line text-fg hover:border-line-strong hover:bg-surface-2`}>
               <RefreshCw strokeWidth={1.5} size={16} /> Reintentar
             </button>
           </div>
@@ -247,7 +247,7 @@ export default function ResultPanel({ status, result, error, onRetry, onTranslat
               <div className="min-h-[240px] flex flex-col items-center justify-center text-center gap-4">
                 <Sparkles strokeWidth={1.5} size={28} className="text-muted" />
                 <p className="text-sm text-muted max-w-xs">Genera un resumen breve con los puntos clave de esta transcripción.</p>
-                <button onClick={summarize} className={`${toolBtn} bg-accent text-on-accent hover:opacity-90`}>
+                <button onClick={summarize} data-ds-theme="dark" className={`${toolBtn} edge-on-light bg-accent text-on-accent hover:opacity-90`}>
                   <Sparkles strokeWidth={1.5} size={16} /> Generar resumen
                 </button>
               </div>
@@ -285,7 +285,7 @@ export default function ResultPanel({ status, result, error, onRetry, onTranslat
               <CheckCircle2 strokeWidth={1.5} size={16} className="text-fg" />
               Transcripción completada en {(result.elapsedMs / 1000).toFixed(1)} segundos
             </span>
-            <div className="flex items-center gap-1">
+            <div data-ds-theme="dark" className="flex items-center gap-1">
               <div
                 ref={menuRef}
                 className="relative"
@@ -298,7 +298,7 @@ export default function ResultPanel({ status, result, error, onRetry, onTranslat
                   disabled={busy !== null}
                   aria-haspopup="menu"
                   aria-expanded={menuOpen}
-                  className={`${toolBtn} text-muted hover:text-fg hover:bg-surface-2`}
+                  className={`${toolBtn} bg-surface text-muted hover:text-fg hover:bg-surface-2`}
                 >
                   {busy === 'translate' ? <Loader2 strokeWidth={1.5} size={16} className="animate-spin" /> : <Languages strokeWidth={1.5} size={16} />}
                   {busy === 'translate' ? 'Traduciendo…' : 'Traducir'}
@@ -331,7 +331,7 @@ export default function ResultPanel({ status, result, error, onRetry, onTranslat
                   </div>
                 )}
               </div>
-              <button onClick={summarize} disabled={busy !== null} className={`${toolBtn} text-muted hover:text-fg hover:bg-surface-2`}>
+              <button onClick={summarize} disabled={busy !== null} className={`${toolBtn} bg-surface text-muted hover:text-fg hover:bg-surface-2`}>
                 {busy === 'summary' ? <Loader2 strokeWidth={1.5} size={16} className="animate-spin" /> : <Sparkles strokeWidth={1.5} size={16} />}
                 Resumen IA
               </button>

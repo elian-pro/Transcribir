@@ -99,3 +99,22 @@
    mantener contraste AA (ZR-06, ZR-07). Agregado en este proyecto, no viene del DS. */
 :root { --danger: #B91C1C; }
 [data-ds-theme="dark"] { --danger: #F87171; }
+
+/* Tema light acotado a un contenedor (card de transcripción sobre la página dark).
+   Mismos valores que :root light; los hijos con data-ds-theme="dark" vuelven a dark,
+   así los botones conservan sus colores. Agregado en este proyecto, no viene del DS. */
+.theme-light {
+  --border: rgba(10, 10, 10, .10);
+  --border-strong: rgba(10, 10, 10, .12);
+  --bg: #FFFFFF; --surface: #FFFFFF; --surface-2: #F9FAFB;
+  --text: #0A0A0A; --text-muted: #737373; --accent: #0A0A0A; --overlay: rgba(10,10,10,.45);
+  --danger: #B91C1C;
+  --shadow-sm:  0 0 0 1px rgba(10,10,10,.04), 0 1px 2px rgba(10,10,10,.06);
+  --shadow-md:  0 0 0 1px rgba(10,10,10,.04), 0 2px 4px -1px rgba(10,10,10,.08), 0 4px 8px -2px rgba(10,10,10,.06);
+  --shadow-lg:  0 0 0 1px rgba(10,10,10,.04), 0 4px 8px -2px rgba(10,10,10,.10), 0 12px 24px -6px rgba(10,10,10,.10);
+  --shadow-card: var(--shadow-sm);
+  color-scheme: light;
+  color: var(--text);
+}
+/* Botón blanco dentro del card blanco: borde fino para que no se pierda (ZR-14, sin engrosar). */
+.theme-light .edge-on-light { box-shadow: 0 0 0 1px rgba(10, 10, 10, .14); }
