@@ -187,11 +187,10 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-bg text-fg selection:bg-accent selection:text-on-accent">
       <Header email={user.email} onLogout={logout} />
 
-      <main className="flex-grow w-full max-w-7xl mx-auto px-4 lg:px-12 pt-28 pb-16">
-        <div className="max-w-2xl mb-10">
-          <p className="label mb-4">La herramienta</p>
-          <h1 className="text-4xl md:text-5xl font-semibold tracking-tight mb-3">Transcribir audio y video</h1>
-          <p className="text-lg text-muted">Sube uno o varios archivos MP4, MOV, MP3 o WAV y obtén el texto listo para copiar o descargar.</p>
+      <main className="flex-grow w-full max-w-7xl mx-auto px-4 lg:px-12 pt-24 pb-16">
+        <div className="max-w-3xl mb-6">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mb-1.5">Transcribir audio y video</h1>
+          <p className="text-base text-muted">Sube uno o varios archivos MP4, MOV, MP3 o WAV y obtén el texto listo para copiar o descargar.</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

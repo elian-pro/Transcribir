@@ -97,7 +97,7 @@ export default function ResultPanel({ status, result, error, onRetry, onTranslat
   const name = result ? `${baseName(result.fileName)}${view === 'original' ? '' : `-${view}`}` : 'transcripcion';
 
   return (
-    <div className="theme-light rounded-card bg-surface border border-line shadow-card flex flex-col min-h-[360px] lg:min-h-[580px]">
+    <div className="theme-light rounded-card bg-surface border border-line shadow-card flex flex-col min-h-[360px] lg:min-h-[min(580px,calc(100vh-200px))]">
       {/* Pestañas y acciones */}
       <div className="px-4 py-3 border-b border-line flex flex-wrap items-center justify-between gap-3">
         <div role="tablist" data-ds-theme="dark" className="flex w-full sm:w-auto items-center gap-1 bg-surface-2 border border-line p-0.5 rounded-control">
@@ -159,9 +159,9 @@ export default function ResultPanel({ status, result, error, onRetry, onTranslat
       )}
 
       {/* Contenido */}
-      <div className="flex-1 p-6 overflow-y-auto lg:max-h-[560px]">
+      <div className="flex-1 p-6 overflow-y-auto lg:max-h-[min(560px,calc(100vh-380px))]">
         {status === AppStatus.IDLE && (
-          <div className="h-full min-h-[240px] lg:min-h-[420px] flex flex-col items-center justify-center text-center gap-3">
+          <div className="h-full min-h-[240px] lg:min-h-[min(420px,calc(100vh-420px))] flex flex-col items-center justify-center text-center gap-3">
             <FileText strokeWidth={1.5} size={28} className="text-muted" />
             <p className="text-fg font-medium">La transcripción aparecerá aquí.</p>
             <p className="text-sm text-muted max-w-xs">Sube uno o varios archivos; se transcriben uno por uno, en orden.</p>
@@ -169,7 +169,7 @@ export default function ResultPanel({ status, result, error, onRetry, onTranslat
         )}
 
         {status === AppStatus.QUEUED && (
-          <div className="h-full min-h-[240px] lg:min-h-[420px] flex flex-col items-center justify-center text-center gap-3">
+          <div className="h-full min-h-[240px] lg:min-h-[min(420px,calc(100vh-420px))] flex flex-col items-center justify-center text-center gap-3">
             <Clock strokeWidth={1.5} size={28} className="text-muted" />
             <p className="text-fg font-medium">En cola.</p>
             <p className="text-sm text-muted max-w-xs">Este archivo se procesará en cuanto terminen los anteriores.</p>
@@ -177,7 +177,7 @@ export default function ResultPanel({ status, result, error, onRetry, onTranslat
         )}
 
         {(status === AppStatus.EXTRACTING_AUDIO || status === AppStatus.TRANSCRIBING) && (
-          <div className="h-full min-h-[240px] lg:min-h-[420px] flex flex-col items-center justify-center text-center gap-4">
+          <div className="h-full min-h-[240px] lg:min-h-[min(420px,calc(100vh-420px))] flex flex-col items-center justify-center text-center gap-4">
             <Loader2 strokeWidth={1.5} size={28} className="animate-spin text-fg" />
             <p className="text-xl font-semibold tracking-tight">
               {status === AppStatus.EXTRACTING_AUDIO ? 'Extrayendo audio…' : 'La IA está transcribiendo…'}
@@ -191,7 +191,7 @@ export default function ResultPanel({ status, result, error, onRetry, onTranslat
         )}
 
         {status === AppStatus.ERROR && (
-          <div className="h-full min-h-[240px] lg:min-h-[420px] flex flex-col items-center justify-center text-center gap-4">
+          <div className="h-full min-h-[240px] lg:min-h-[min(420px,calc(100vh-420px))] flex flex-col items-center justify-center text-center gap-4">
             <AlertCircle strokeWidth={1.5} size={28} className="text-danger" />
             <p className="text-xl font-semibold tracking-tight">Algo salió mal.</p>
             <p className="text-sm text-muted max-w-md">{error}</p>
