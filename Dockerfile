@@ -6,6 +6,8 @@ RUN npm install
 COPY . .
 ARG API_KEY
 ENV API_KEY=$API_KEY
+ARG GOOGLE_CLIENT_ID
+ENV GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
 RUN npm run build
 
 # Etapa 2: Servidor de producción

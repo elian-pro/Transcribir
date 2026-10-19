@@ -1,301 +1,243 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { 
-  FileVideo, 
-  Upload, 
-  Loader2, 
-  CheckCircle2, 
-  AlertCircle, 
-  Copy, 
-  ChevronRight,
-  RefreshCw,
-  Zap,
-  Key,
-  ShieldCheck,
-  ExternalLink
-} from 'lucide-react';
-import { extractAudioFromVideo } from './services/audioService';
-import { transcribeAudio } from './services/geminiService';
-import { AppStatus, TranscriptionResult } from './types';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { AlertCircle, ShieldAlert, X } from 'lucide-react';
+import { AppStatus, QueueStatus } from './types';
+import { useQueue } from './hooks/useQueue';
+import Header from './components/Header';
+import Footer from './components/Footer';
+import DropZone from './components/DropZone';
+import FileQueue from './components/FileQueue';
+import ResultPanel from './components/ResultPanel';
+
+const STATUS_FOR_PANEL: Record<QueueStatus, AppStatus> = {
+  queued: AppStatus.QUEUED,
+  extracting: AppStatus.EXTRACTING_AUDIO,
+  transcribing: AppStatus.TRANSCRIBING,
+  done: AppStatus.COMPLETED,
+  error: AppStatus.ERROR,
+};
+
+const ALLOWED_DOMAIN = 'zebradigital.marketing';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const USER_STORAGE_KEY = 'ZEBRA_USER';
+
+interface AuthUser {
+  email: string;
+  name?: string;
+  picture?: string;
+}
+
+// Decodifica el payload de un JWT (sin verificar firma: es una puerta de UI, no seguridad de servidor)
+function decodeJwt(token: string): any {
+  const part = token.split('.')[1];
+  const base64 = part.replace(/-/g, '+').replace(/_/g, '/');
+  const json = decodeURIComponent(
+    atob(base64)
+      .split('')
+      .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+      .join('')
+  );
+  return JSON.parse(json);
+}
 
 export default function App() {
-  const [file, setFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
-  const [result, setResult] = useState<TranscriptionResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+
   const [apiKey, setApiKey] = useState('');
-  const [showKeyInput, setShowKeyInput] = useState(true);
+  const [notice, setNotice] = useState<string | null>(null);
+  const queue = useQueue(apiKey);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const googleBtnRef = useRef<HTMLDivElement>(null);
 
-  // Cargar API Key del entorno o localStorage al inicio
+  // La API Key siempre viene del entorno (Easy Panel). Como respaldo, localStorage.
   useEffect(() => {
-    // Primero verificar si hay una API_KEY del entorno (configurada en Easy Panel)
     const envKey = process.env.API_KEY;
     if (envKey) {
       setApiKey(envKey);
-      setShowKeyInput(false);
       return;
     }
-
-    // Si no hay en el entorno, verificar localStorage
     const savedKey = localStorage.getItem('GEMINI_API_KEY');
-    if (savedKey) {
-      setApiKey(savedKey);
-      setShowKeyInput(false);
+    if (savedKey) setApiKey(savedKey);
+  }, []);
+
+  // Restaurar sesión previa
+  useEffect(() => {
+    const saved = localStorage.getItem(USER_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed: AuthUser = JSON.parse(saved);
+        if (parsed.email && parsed.email.toLowerCase().endsWith('@' + ALLOWED_DOMAIN)) {
+          setUser(parsed);
+        }
+      } catch {
+        /* noop */
+      }
     }
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile && (selectedFile.type.startsWith('video/') || selectedFile.type.startsWith('audio/'))) {
-      setFile(selectedFile);
-      setResult(null);
-      setError(null);
-      setStatus(AppStatus.IDLE);
-      setProgress(0);
-    } else if (selectedFile) {
-      setError("Por favor, selecciona un archivo de vídeo o audio válido (MP4, MP3, WAV, etc).");
-    }
-  };
-
-  const saveKey = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (apiKey.trim()) {
-      localStorage.setItem('GEMINI_API_KEY', apiKey.trim());
-      setShowKeyInput(false);
-    }
-  };
-
-  const processFile = async () => {
-    if (!file) return;
-    if (!apiKey.trim()) {
-      setError("Necesitas una API Key para realizar la transcripción.");
-      setShowKeyInput(true);
-      return;
-    }
-
+  const handleCredential = useCallback((response: any) => {
     try {
-      setStatus(AppStatus.EXTRACTING_AUDIO);
-      setError(null);
-      setProgress(15);
+      const payload = decodeJwt(response.credential);
+      const email: string = (payload.email || '').toLowerCase();
+      const domainOk =
+        email.endsWith('@' + ALLOWED_DOMAIN) || payload.hd === ALLOWED_DOMAIN;
 
-      const progressInterval = setInterval(() => {
-        setProgress(prev => (prev < 90 ? prev + 5 : prev));
-      }, 800);
+      if (!payload.email_verified || !domainOk) {
+        setAuthError(`Acceso restringido a cuentas @${ALLOWED_DOMAIN}.`);
+        (window as any).google?.accounts.id.disableAutoSelect();
+        return;
+      }
 
-      const { base64, duration } = await extractAudioFromVideo(file);
-      
-      setStatus(AppStatus.TRANSCRIBING);
-      const text = await transcribeAudio(base64, apiKey);
-      
-      clearInterval(progressInterval);
-      setProgress(100);
-
-      setResult({ text, duration });
-      setStatus(AppStatus.COMPLETED);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "No se pudo procesar el vídeo. Verifica que tu API Key sea válida.");
-      setStatus(AppStatus.ERROR);
+      const authed: AuthUser = { email, name: payload.name, picture: payload.picture };
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authed));
+      setAuthError(null);
+      setUser(authed);
+    } catch {
+      setAuthError('No se pudo validar el inicio de sesión. Intenta de nuevo.');
     }
+  }, []);
+
+  // Inicializar el botón de Google cuando no hay sesión
+  useEffect(() => {
+    if (user || !GOOGLE_CLIENT_ID) return;
+
+    let cancelled = false;
+    const tryInit = () => {
+      const google = (window as any).google;
+      if (cancelled) return;
+      if (!google?.accounts?.id) {
+        setTimeout(tryInit, 200);
+        return;
+      }
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleCredential,
+        hd: ALLOWED_DOMAIN,
+        auto_select: false
+      });
+      if (googleBtnRef.current) {
+        googleBtnRef.current.innerHTML = '';
+        google.accounts.id.renderButton(googleBtnRef.current, {
+          theme: 'filled_black',
+          size: 'large',
+          shape: 'pill',
+          text: 'continue_with',
+          width: 280
+        });
+      }
+    };
+    tryInit();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, handleCredential]);
+
+  const logout = () => {
+    localStorage.removeItem(USER_STORAGE_KEY);
+    (window as any).google?.accounts.id.disableAutoSelect();
+    setUser(null);
+    queue.reset();
+    setNotice(null);
   };
 
-  const copyToClipboard = () => {
-    if (result) {
-      navigator.clipboard.writeText(result.text);
-    }
-  };
+  const selected = queue.selected;
 
-  const reset = () => {
-    setFile(null);
-    setResult(null);
-    setStatus(AppStatus.IDLE);
-    setError(null);
-    setProgress(0);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
+  // ------- PANTALLA DE LOGIN -------
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col bg-bg text-fg selection:bg-accent selection:text-on-accent">
+        <Header />
+        <main className="flex-grow flex items-center justify-center px-4 pt-28 pb-16">
+          <div className="w-full max-w-md rounded-card bg-surface border border-line shadow-card p-8 text-center">
+            <p className="label mb-4">Acceso privado</p>
+            <h1 className="text-3xl font-semibold tracking-tight mb-3">Inicia sesión</h1>
+            <p className="text-muted mb-8 leading-relaxed">
+              Solo cuentas <span className="text-fg font-semibold">@{ALLOWED_DOMAIN}</span> pueden usar el transcriptor.
+            </p>
 
-  return (
-    <div className="min-h-screen flex flex-col items-center p-4 md:p-8 selection:bg-blue-500/30 bg-white">
-      {/* Logo en esquina superior izquierda */}
-      <div className="absolute top-4 left-4 md:top-8 md:left-8">
-        <img src="/LOGO.png" alt="Logo" className="h-12 md:h-16 w-auto" />
-      </div>
-
-      <header className="w-full max-w-4xl mb-12 text-center pt-8">
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-full text-blue-600 text-sm font-medium mb-6">
-          <Zap size={14} /> AI Audio & Video Transcriber
-        </div>
-        <h1 className="text-5xl md:text-6xl font-black mb-4 tracking-tight bg-gradient-to-b from-black to-slate-600 bg-clip-text text-transparent">
-          Audio y Video a Texto
-        </h1>
-        <p className="text-slate-600 text-lg max-w-xl mx-auto mb-8 leading-relaxed">
-          Sube tu vídeo o audio (MP3, MP4, WAV, etc.) y transcribe con inteligencia artificial.
-        </p>
-
-        {/* API Key Management UI */}
-        <div className="max-w-md mx-auto mb-12">
-          {showKeyInput ? (
-            <form onSubmit={saveKey} className="glass-panel p-6 rounded-3xl border border-black/10 space-y-4 shadow-2xl">
-              <div className="flex items-center gap-3 mb-2 text-left">
-                <div className="p-2 bg-blue-500/20 rounded-lg text-blue-600">
-                  <Key size={18} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-black">Configurar API Key</h3>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider">Requerido para la IA</p>
-                </div>
+            {GOOGLE_CLIENT_ID ? (
+              <div className="flex flex-col items-center gap-5">
+                <div ref={googleBtnRef} className="min-h-[44px] flex items-center justify-center" />
+                {authError && (
+                  <div className="flex items-center gap-2 text-danger text-sm font-semibold">
+                    <ShieldAlert strokeWidth={1.5} size={16} /> {authError}
+                  </div>
+                )}
               </div>
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Introduce tu Gemini API Key..."
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                required
-              />
-              <div className="flex items-center justify-between gap-4">
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  className="text-[11px] text-blue-600 hover:text-blue-500 flex items-center gap-1 transition-colors"
-                >
-                  Obtener clave gratis <ExternalLink size={10} />
-                </a>
-                <button
-                  type="submit"
-                  className="px-6 py-2 bg-black text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all active:scale-95"
-                >
-                  Guardar
+            ) : (
+              <div className="border border-line bg-surface-2 rounded-control p-5 text-left">
+                <div className="flex items-center gap-2 text-danger font-semibold mb-2">
+                  <AlertCircle strokeWidth={1.5} size={18} /> Falta configuración
+                </div>
+                <p className="text-muted text-sm leading-relaxed">
+                  No se ha definido <code className="text-fg">GOOGLE_CLIENT_ID</code> en el entorno.
+                  Añádelo en Easy Panel y vuelve a desplegar.
+                </p>
+              </div>
+            )}
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // ------- APP -------
+  return (
+    <div className="min-h-screen flex flex-col bg-bg text-fg selection:bg-accent selection:text-on-accent">
+      <Header email={user.email} onLogout={logout} />
+
+      <main className="flex-grow w-full max-w-7xl mx-auto px-4 lg:px-12 pt-24 pb-16">
+        <div className="max-w-3xl mb-6">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mb-1.5">Transcribir audio y video</h1>
+          <p className="text-base text-muted">Sube uno o varios archivos MP4, MOV, MP3 o WAV y obtén el texto listo para copiar o descargar.</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-5 flex flex-col gap-4">
+            <DropZone
+              onFiles={queue.add}
+              onInvalid={setNotice}
+            />
+
+            {notice && (
+              <div role="alert" className="rounded-card bg-surface border border-line p-4 flex items-start gap-3 text-sm">
+                <AlertCircle strokeWidth={1.5} size={18} className="text-danger shrink-0 mt-0.5" />
+                <p className="flex-1 text-muted">{notice}</p>
+                <button onClick={() => setNotice(null)} aria-label="Cerrar aviso" className="text-muted hover:text-fg">
+                  <X strokeWidth={1.5} size={16} />
                 </button>
               </div>
-            </form>
-          ) : (
-            <div className="flex items-center justify-between px-6 py-3 bg-slate-100 border border-slate-200 rounded-2xl">
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="text-green-600" size={18} />
-                <span className="text-sm font-medium text-slate-800">API Key Configurada</span>
-              </div>
-              <button
-                onClick={() => setShowKeyInput(true)}
-                className="text-xs text-slate-500 hover:text-black transition-colors underline"
-              >
-                Cambiar
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+            )}
 
-      <main className="w-full max-w-3xl flex-grow">
-        {status === AppStatus.IDLE && (
-          <div className="glass-panel p-10 rounded-[2.5rem] border-2 border-dashed border-slate-300 hover:border-slate-400 transition-all group">
-            <div className="flex flex-col items-center text-center">
-              <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500">
-                <Upload className="text-blue-600" size={32} />
-              </div>
-
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept="video/*,audio/*"
-                className="hidden"
+            {queue.items.length > 0 && (
+              <FileQueue
+                items={queue.items}
+                selectedId={selected?.id ?? null}
+                onSelect={queue.select}
+                onRemove={queue.remove}
+                onRetry={queue.retry}
+                onClear={queue.clearFinished}
               />
-
-              {!file ? (
-                <>
-                  <h2 className="text-2xl font-bold mb-2 text-black">Selecciona un archivo</h2>
-                  <p className="text-slate-500 mb-8">Soporta video (MP4, MOV) y audio (MP3, WAV, etc.)</p>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-8 py-4 bg-black text-white rounded-2xl font-bold hover:bg-slate-800 transition-all active:scale-95"
-                  >
-                    Elegir Archivo
-                  </button>
-                </>
-              ) : (
-                <div className="w-full space-y-6">
-                  <div className="flex items-center gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-200 text-left">
-                    <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center shrink-0">
-                      <FileVideo className="text-blue-600" size={24} />
-                    </div>
-                    <div className="flex-grow min-w-0">
-                      <p className="font-bold truncate text-black">{file.name}</p>
-                      <p className="text-xs text-slate-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
-                    </div>
-                    <button onClick={reset} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500"><RefreshCw size={18} /></button>
-                  </div>
-                  <button
-                    onClick={processFile}
-                    disabled={!apiKey}
-                    className={`w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 ${
-                      apiKey
-                      ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20'
-                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                    }`}
-                  >
-                    {apiKey ? 'Iniciar Transcripción' : 'Falta API Key'} <ChevronRight size={20} />
-                  </button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
-        )}
 
-        {(status === AppStatus.EXTRACTING_AUDIO || status === AppStatus.TRANSCRIBING) && (
-          <div className="glass-panel p-16 rounded-[2.5rem] text-center space-y-8">
-            <Loader2 className="animate-spin text-blue-600 mx-auto" size={48} />
-            <div className="space-y-3">
-              <h3 className="text-2xl font-bold text-black">
-                {status === AppStatus.EXTRACTING_AUDIO ? 'Extrayendo Audio...' : 'IA Transcribiendo...'}
-              </h3>
-              <div className="max-w-xs mx-auto">
-                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mb-2">
-                  <div className="bg-blue-600 h-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
-                </div>
-                <p className="text-[10px] uppercase font-bold text-slate-400">{progress}% Completado</p>
-              </div>
-            </div>
+          <div className="lg:col-span-7">
+            <ResultPanel
+              // key: cada archivo abre el panel con su propio estado (pestaña, idioma, errores).
+              key={selected?.id ?? 'none'}
+              onTranslate={(language) => (selected ? queue.translate(selected, language) : Promise.resolve())}
+              onSummarize={() => (selected ? queue.summarize(selected) : Promise.resolve())}
+              status={selected ? STATUS_FOR_PANEL[selected.status] : AppStatus.IDLE}
+              result={selected?.result ?? null}
+              error={selected?.error ?? null}
+              onRetry={() => selected && queue.retry(selected.id)}
+            />
           </div>
-        )}
-
-        {status === AppStatus.ERROR && (
-          <div className="glass-panel p-10 rounded-[2.5rem] border-2 border-red-500/30 text-center">
-            <AlertCircle className="text-red-500 mx-auto mb-6" size={48} />
-            <h3 className="text-2xl font-bold text-red-600 mb-3">Error</h3>
-            <p className="text-slate-600 mb-8">{error}</p>
-            <button onClick={reset} className="px-8 py-3 bg-black hover:bg-slate-800 text-white rounded-xl font-bold transition-all">Reintentar</button>
-          </div>
-        )}
-
-        {status === AppStatus.COMPLETED && result && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-6">
-            <div className="glass-panel p-6 rounded-[2rem] border border-blue-500/30 flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-5">
-                <CheckCircle2 className="text-green-600" size={32} />
-                <h4 className="font-bold text-xl text-black">Proceso Finalizado</h4>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={copyToClipboard} className="flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-black rounded-xl font-bold transition-all border border-slate-200"><Copy size={18} /> Copiar</button>
-                <button onClick={reset} className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl"><RefreshCw size={20} /></button>
-              </div>
-            </div>
-            <div className="glass-panel p-8 rounded-[2rem] relative shadow-2xl min-h-[200px] border border-slate-200">
-              <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium">
-                {result.text}
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
       </main>
 
-      <footer className="w-full max-w-4xl py-10 text-center border-t border-slate-200 mt-12">
-        <p className="text-slate-400 text-xs font-medium uppercase tracking-widest">
-          Audio & Video Transcriber &bull; Sin servidores intermedios &bull; 100% Privado
-        </p>
-      </footer>
+      <Footer />
     </div>
   );
 }

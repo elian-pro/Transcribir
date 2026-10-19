@@ -7,8 +7,9 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
   },
-  // Esto permite que el código cliente acceda a process.env.API_KEY durante el build
+  // Esto permite que el código cliente acceda a variables del entorno durante el build
   define: {
-    'process.env.API_KEY': JSON.stringify(process.env.API_KEY || '')
+    'process.env.API_KEY': JSON.stringify(process.env.API_KEY || ''),
+    'process.env.GOOGLE_CLIENT_ID': JSON.stringify(process.env.GOOGLE_CLIENT_ID || '')
   }
 });
