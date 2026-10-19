@@ -118,3 +118,9 @@
 }
 /* Botón blanco dentro del card blanco: borde fino para que no se pierda (ZR-14, sin engrosar). */
 .theme-light .edge-on-light { box-shadow: 0 0 0 1px rgba(10, 10, 10, .14); }
+/* Foco de los botones dark que viven sobre el card blanco: el anillo blanco (--accent dark)
+   no se vería, así que va oscuro con una separación blanca. Sigue siendo 1px (ZR-18). */
+.theme-light .focus-on-light :focus-visible,
+.theme-light .focus-on-light:focus-visible {
+  box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 3px #0A0A0A;
+}
