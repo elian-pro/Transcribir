@@ -1,14 +1,20 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { AlertCircle, ArrowRight, ShieldAlert } from 'lucide-react';
-import { extractAudioFromVideo } from './services/audioService';
-import { transcribeAudio } from './services/geminiService';
-import { toPlainText } from './services/formatService';
-import { AppStatus, TranscriptionResult } from './types';
+import { AlertCircle, ShieldAlert, X } from 'lucide-react';
+import { AppStatus, QueueStatus } from './types';
+import { useQueue } from './hooks/useQueue';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import DropZone from './components/DropZone';
-import FileItem, { FileItemStatus } from './components/FileItem';
+import FileQueue from './components/FileQueue';
 import ResultPanel from './components/ResultPanel';
+
+const STATUS_FOR_PANEL: Record<QueueStatus, AppStatus> = {
+  queued: AppStatus.QUEUED,
+  extracting: AppStatus.EXTRACTING_AUDIO,
+  transcribing: AppStatus.TRANSCRIBING,
+  done: AppStatus.COMPLETED,
+  error: AppStatus.ERROR,
+};
 
 const ALLOWED_DOMAIN = 'zebradigital.marketing';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
@@ -37,12 +43,9 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const [file, setFile] = useState<File | null>(null);
-  const [fileDuration, setFileDuration] = useState<number | undefined>();
-  const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
-  const [result, setResult] = useState<TranscriptionResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
+  const queue = useQueue(apiKey);
 
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
@@ -133,69 +136,11 @@ export default function App() {
     localStorage.removeItem(USER_STORAGE_KEY);
     (window as any).google?.accounts.id.disableAutoSelect();
     setUser(null);
-    reset();
+    queue.reset();
+    setNotice(null);
   };
 
-  const selectFile = (selected: File) => {
-    setFile(selected);
-    setFileDuration(undefined);
-    setResult(null);
-    setError(null);
-    setStatus(AppStatus.IDLE);
-  };
-
-  const showInvalid = (message: string) => {
-    setError(message);
-    setStatus(AppStatus.ERROR);
-  };
-
-  const processFile = async () => {
-    if (!file) return;
-    if (!apiKey.trim()) {
-      showInvalid('No se encontró una API Key configurada en el entorno.');
-      return;
-    }
-
-    const startedAt = performance.now();
-    setStatus(AppStatus.EXTRACTING_AUDIO);
-    setError(null);
-
-    try {
-      const { blob, duration } = await extractAudioFromVideo(file);
-      setFileDuration(duration);
-
-      setStatus(AppStatus.TRANSCRIBING);
-      const segments = await transcribeAudio(blob, duration, apiKey);
-
-      setResult({ segments, text: toPlainText(segments), duration, elapsedMs: performance.now() - startedAt, fileName: file.name });
-      setStatus(AppStatus.COMPLETED);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'No se pudo procesar el archivo. Verifica que la API Key sea válida.');
-      setStatus(AppStatus.ERROR);
-    }
-  };
-
-  const reset = () => {
-    setFile(null);
-    setFileDuration(undefined);
-    setResult(null);
-    setStatus(AppStatus.IDLE);
-    setError(null);
-  };
-
-  const busy = status === AppStatus.EXTRACTING_AUDIO || status === AppStatus.TRANSCRIBING;
-
-  const fileStatus: FileItemStatus =
-    status === AppStatus.EXTRACTING_AUDIO
-      ? 'extracting'
-      : status === AppStatus.TRANSCRIBING
-        ? 'transcribing'
-        : status === AppStatus.COMPLETED
-          ? 'done'
-          : status === AppStatus.ERROR
-            ? 'error'
-            : 'ready';
+  const selected = queue.selected;
 
   // ------- PANTALLA DE LOGIN -------
   if (!user) {
@@ -246,31 +191,45 @@ export default function App() {
         <div className="max-w-2xl mb-10">
           <p className="label mb-4">La herramienta</p>
           <h1 className="text-4xl md:text-5xl font-semibold tracking-tight mb-3">Transcribir audio y video</h1>
-          <p className="text-lg text-muted">Sube un archivo MP4, MOV, MP3 o WAV y obtén el texto listo para copiar o descargar.</p>
+          <p className="text-lg text-muted">Sube uno o varios archivos MP4, MOV, MP3 o WAV y obtén el texto listo para copiar o descargar.</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div className="lg:col-span-5 flex flex-col gap-4">
-            <DropZone disabled={busy} onFile={selectFile} onInvalid={showInvalid} />
+            <DropZone
+              onFiles={queue.add}
+              onInvalid={setNotice}
+            />
 
-            {file && (
-              <div className="rounded-card bg-surface border border-line shadow-card p-4 flex flex-col gap-3">
-                <span className="label">Archivo</span>
-                <FileItem file={file} status={fileStatus} duration={fileDuration} onRemove={reset} />
-                {status === AppStatus.IDLE && (
-                  <button
-                    onClick={processFile}
-                    className="w-full py-3 rounded-btn font-semibold flex items-center justify-center gap-2 bg-accent text-on-accent hover:opacity-90 transition-opacity active:scale-[0.99]"
-                  >
-                    Transcribir <ArrowRight strokeWidth={1.5} size={18} />
-                  </button>
-                )}
+            {notice && (
+              <div role="alert" className="rounded-card bg-surface border border-line p-4 flex items-start gap-3 text-sm">
+                <AlertCircle strokeWidth={1.5} size={18} className="text-danger shrink-0 mt-0.5" />
+                <p className="flex-1 text-muted">{notice}</p>
+                <button onClick={() => setNotice(null)} aria-label="Cerrar aviso" className="text-muted hover:text-fg">
+                  <X strokeWidth={1.5} size={16} />
+                </button>
               </div>
+            )}
+
+            {queue.items.length > 0 && (
+              <FileQueue
+                items={queue.items}
+                selectedId={selected?.id ?? null}
+                onSelect={queue.select}
+                onRemove={queue.remove}
+                onRetry={queue.retry}
+                onClear={queue.clearFinished}
+              />
             )}
           </div>
 
           <div className="lg:col-span-7">
-            <ResultPanel status={status} result={result} error={error} onRetry={file ? processFile : reset} />
+            <ResultPanel
+              status={selected ? STATUS_FOR_PANEL[selected.status] : AppStatus.IDLE}
+              result={selected?.result ?? null}
+              error={selected?.error ?? null}
+              onRetry={() => selected && queue.retry(selected.id)}
+            />
           </div>
         </div>
       </main>

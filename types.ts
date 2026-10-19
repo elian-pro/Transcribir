@@ -1,5 +1,6 @@
 export enum AppStatus {
   IDLE = 'IDLE',
+  QUEUED = 'QUEUED',
   EXTRACTING_AUDIO = 'EXTRACTING_AUDIO',
   TRANSCRIBING = 'TRANSCRIBING',
   COMPLETED = 'COMPLETED',
@@ -22,4 +23,15 @@ export interface TranscriptionResult {
   /** Tiempo real que tardó el proceso completo, en milisegundos. */
   elapsedMs: number;
   fileName: string;
+}
+
+export type QueueStatus = 'queued' | 'extracting' | 'transcribing' | 'done' | 'error';
+
+export interface QueueItem {
+  id: string;
+  file: File;
+  status: QueueStatus;
+  duration?: number;
+  result?: TranscriptionResult;
+  error?: string;
 }

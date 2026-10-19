@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Copy, Check, Download, FileText, Loader2, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Copy, Check, Download, FileText, Loader2, RefreshCw } from 'lucide-react';
 import { AppStatus, TranscriptionResult } from '../types';
 import { baseName, countWords, downloadText, formatDuration } from '../utils/format';
 import { formatClock, hasMultipleSpeakers, toParagraphs, toSrt, toTimestamps } from '../services/formatService';
@@ -107,7 +107,15 @@ export default function ResultPanel({ status, result, error, onRetry }: ResultPa
           <div className="h-full min-h-[240px] lg:min-h-[420px] flex flex-col items-center justify-center text-center gap-3">
             <FileText strokeWidth={1.5} size={28} className="text-muted" />
             <p className="text-fg font-medium">La transcripción aparecerá aquí.</p>
-            <p className="text-sm text-muted max-w-xs">Sube un archivo y presiona Transcribir para empezar.</p>
+            <p className="text-sm text-muted max-w-xs">Sube uno o varios archivos; se transcriben uno por uno, en orden.</p>
+          </div>
+        )}
+
+        {status === AppStatus.QUEUED && (
+          <div className="h-full min-h-[240px] lg:min-h-[420px] flex flex-col items-center justify-center text-center gap-3">
+            <Clock strokeWidth={1.5} size={28} className="text-muted" />
+            <p className="text-fg font-medium">En cola.</p>
+            <p className="text-sm text-muted max-w-xs">Este archivo se procesará en cuanto terminen los anteriores.</p>
           </div>
         )}
 

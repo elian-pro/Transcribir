@@ -6,8 +6,9 @@ const ACCEPTED_EXTENSIONS = /\.(mp4|mov|m4v|webm|mkv|mp3|wav|m4a|aac|ogg|flac)$/
 
 interface DropZoneProps {
   disabled?: boolean;
-  onFile: (file: File) => void;
-  onInvalid: (message: string) => void;
+  onFiles: (files: File[]) => void;
+  /** Mensaje con los archivos rechazados, o null si todos fueron válidos. */
+  onInvalid: (message: string | null) => void;
 }
 
 function validate(file: File): string | null {
@@ -17,15 +18,21 @@ function validate(file: File): string | null {
   return null;
 }
 
-export default function DropZone({ disabled, onFile, onInvalid }: DropZoneProps) {
+export default function DropZone({ disabled, onFiles, onInvalid }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
-  const handle = (file?: File) => {
-    if (!file) return;
-    const problem = validate(file);
-    if (problem) onInvalid(problem);
-    else onFile(file);
+  const handle = (list?: FileList | null) => {
+    const files = Array.from(list || []);
+    const valid: File[] = [];
+    const problems: string[] = [];
+    for (const file of files) {
+      const problem = validate(file);
+      if (problem) problems.push(`${file.name}: ${problem}`);
+      else valid.push(file);
+    }
+    onInvalid(problems.length ? problems.join(' ') : null);
+    if (valid.length) onFiles(valid);
   };
 
   return (
@@ -48,7 +55,7 @@ export default function DropZone({ disabled, onFile, onInvalid }: DropZoneProps)
       onDrop={(e) => {
         e.preventDefault();
         setDragging(false);
-        if (!disabled) handle(e.dataTransfer.files?.[0]);
+        if (!disabled) handle(e.dataTransfer.files);
       }}
       className={`group rounded-card border border-dashed bg-surface p-10 min-h-[290px] flex flex-col items-center justify-center text-center transition-colors ${
         disabled
@@ -61,10 +68,11 @@ export default function DropZone({ disabled, onFile, onInvalid }: DropZoneProps)
       <input
         ref={inputRef}
         type="file"
+        multiple
         accept="video/*,audio/*,.mp4,.mov,.mp3,.wav,.m4a,.aac"
         className="hidden"
         onChange={(e) => {
-          handle(e.target.files?.[0]);
+          handle(e.target.files);
           e.target.value = '';
         }}
       />
@@ -72,9 +80,9 @@ export default function DropZone({ disabled, onFile, onInvalid }: DropZoneProps)
         <Upload strokeWidth={1.5} size={26} />
       </div>
       <p className="text-base font-medium text-fg mb-1">
-        Arrastra tu archivo o <span className="underline underline-offset-4">examinar</span>
+        Arrastra tus archivos o <span className="underline underline-offset-4">examinar</span>
       </p>
-      <p className="text-sm text-muted">MP4, MOV, MP3, WAV, M4A, AAC (máx. 500 MB)</p>
+      <p className="text-sm text-muted">MP4, MOV, MP3, WAV, M4A, AAC (máx. 500 MB por archivo)</p>
     </div>
   );
 }
