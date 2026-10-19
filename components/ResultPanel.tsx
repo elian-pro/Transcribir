@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { AlertCircle, CheckCircle2, Copy, Check, FileText, Loader2, RefreshCw } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { AlertCircle, CheckCircle2, Copy, Check, Download, FileText, Loader2, RefreshCw } from 'lucide-react';
 import { AppStatus, TranscriptionResult } from '../types';
 import { baseName, countWords, downloadText, formatDuration } from '../utils/format';
+import { formatClock, hasMultipleSpeakers, toParagraphs, toSrt, toTimestamps } from '../services/formatService';
 
 interface ResultPanelProps {
   status: AppStatus;
@@ -10,46 +11,93 @@ interface ResultPanelProps {
   onRetry: () => void;
 }
 
+type Tab = 'text' | 'srt' | 'timestamps';
+
+const TABS: { id: Tab; label: string; short: string }[] = [
+  { id: 'text', label: 'Texto', short: 'Texto' },
+  { id: 'srt', label: 'Subtítulos .SRT', short: '.SRT' },
+  { id: 'timestamps', label: 'Marcas de tiempo', short: 'Tiempos' },
+];
+
 const toolBtn =
-  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-control text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+  'inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-control text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 
 export default function ResultPanel({ status, result, error, onRetry }: ResultPanelProps) {
+  const [tab, setTab] = useState<Tab>('text');
   const [copied, setCopied] = useState(false);
   const done = status === AppStatus.COMPLETED && result;
 
+  const views = useMemo(() => {
+    if (!result) return null;
+    return {
+      text: result.text,
+      srt: toSrt(result.segments),
+      timestamps: toTimestamps(result.segments),
+      paragraphs: toParagraphs(result.segments),
+      multi: hasMultipleSpeakers(result.segments),
+    };
+  }, [result]);
+
   const copy = async () => {
-    if (!result) return;
-    await navigator.clipboard.writeText(result.text);
+    if (!views) return;
+    await navigator.clipboard.writeText(views[tab]);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   };
 
+  const name = result ? baseName(result.fileName) : 'transcripcion';
+
   return (
     <div className="rounded-card bg-surface border border-line shadow-card flex flex-col min-h-[360px] lg:min-h-[580px]">
-      {/* Barra de herramientas */}
+      {/* Pestañas y acciones */}
       <div className="px-4 py-3 border-b border-line flex flex-wrap items-center justify-between gap-3">
-        <span className="label">Transcripción</span>
+        <div role="tablist" className="flex w-full sm:w-auto items-center gap-1 bg-surface-2 border border-line p-0.5 rounded-control">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={tab === t.id}
+              aria-label={t.label}
+              onClick={() => setTab(t.id)}
+              className={`flex-1 sm:flex-none whitespace-nowrap px-3 py-1.5 rounded-chip text-sm transition-colors ${
+                tab === t.id ? 'bg-surface text-fg font-semibold shadow-sm' : 'text-muted hover:text-fg'
+              }`}
+            >
+              <span className="sm:hidden">{t.short}</span>
+              <span className="hidden sm:inline">{t.label}</span>
+            </button>
+          ))}
+        </div>
         <div className="flex items-center gap-2">
           <button onClick={copy} disabled={!done} className={`${toolBtn} border border-line text-fg hover:border-line-strong hover:bg-surface-2`}>
             {copied ? <Check strokeWidth={1.75} size={16} /> : <Copy strokeWidth={1.5} size={16} />}
             {copied ? 'Copiado' : 'Copiar'}
           </button>
           <button
-            onClick={() => result && downloadText(result.text, `${baseName(result.fileName)}.txt`)}
+            onClick={() => views && downloadText(views.text, `${name}.txt`)}
+            disabled={!done}
+            className={`${toolBtn} border border-line text-fg hover:border-line-strong hover:bg-surface-2`}
+          >
+            <FileText strokeWidth={1.5} size={16} /> .TXT
+          </button>
+          <button
+            onClick={() => views && downloadText(views.srt, `${name}.srt`)}
             disabled={!done}
             className={`${toolBtn} bg-accent text-on-accent hover:opacity-90`}
           >
-            <FileText strokeWidth={1.5} size={16} /> .TXT
+            <Download strokeWidth={1.5} size={16} /> <span className="hidden sm:inline">Exportar</span> .SRT
           </button>
         </div>
       </div>
 
       {/* Métricas reales */}
       {done && (
-        <div className="px-4 py-2 border-b border-line flex items-center gap-2 font-mono text-xs text-muted">
+        <div className="px-4 py-2 border-b border-line flex flex-wrap items-center gap-2 font-mono text-xs text-muted">
           <span>{countWords(result.text).toLocaleString('es-MX')} palabras</span>
           <span>·</span>
           <span>{formatDuration(result.duration)} de audio</span>
+          <span>·</span>
+          <span>{result.segments.length} segmentos</span>
         </div>
       )}
 
@@ -88,8 +136,37 @@ export default function ResultPanel({ status, result, error, onRetry }: ResultPa
           </div>
         )}
 
-        {done && (
-          <div className="text-base leading-7 text-fg whitespace-pre-wrap text-left">{result.text}</div>
+        {done && views && tab === 'text' && (
+          <div className="flex flex-col gap-4 text-left">
+            {views.paragraphs.map((p, i) => (
+              <p key={i} className="text-base leading-7 text-fg">
+                {views.multi && <span className="label block mb-1">{p.speaker}</span>}
+                {p.text}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {done && views && tab === 'srt' && (
+          <pre className="font-mono text-xs leading-6 text-muted bg-surface-2 border border-line rounded-control p-4 whitespace-pre-wrap text-left">
+            {views.srt}
+          </pre>
+        )}
+
+        {done && tab === 'timestamps' && (
+          <div className="flex flex-col gap-1 text-left">
+            {result.segments.map((s, i) => (
+              <div key={i} className="flex items-start gap-4 p-2 rounded-control hover:bg-surface-2 transition-colors">
+                <span className="font-mono text-xs text-fg border border-line bg-surface-2 px-2 py-0.5 rounded-chip shrink-0 mt-0.5">
+                  {formatClock(s.start)}
+                </span>
+                <div className="flex-1 min-w-0">
+                  {views?.multi && <span className="label block mb-0.5">{s.speaker}</span>}
+                  <p className="text-sm leading-6 text-fg">{s.text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

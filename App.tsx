@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AlertCircle, ArrowRight, ShieldAlert } from 'lucide-react';
 import { extractAudioFromVideo } from './services/audioService';
 import { transcribeAudio } from './services/geminiService';
+import { toPlainText } from './services/formatService';
 import { AppStatus, TranscriptionResult } from './types';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -164,9 +165,9 @@ export default function App() {
       setFileDuration(duration);
 
       setStatus(AppStatus.TRANSCRIBING);
-      const text = await transcribeAudio(blob, duration, apiKey);
+      const segments = await transcribeAudio(blob, duration, apiKey);
 
-      setResult({ text, duration, elapsedMs: performance.now() - startedAt, fileName: file.name });
+      setResult({ segments, text: toPlainText(segments), duration, elapsedMs: performance.now() - startedAt, fileName: file.name });
       setStatus(AppStatus.COMPLETED);
     } catch (err: any) {
       console.error(err);

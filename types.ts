@@ -6,7 +6,17 @@ export enum AppStatus {
   ERROR = 'ERROR'
 }
 
+/** Un fragmento de la transcripción con sus tiempos, en segundos. */
+export interface Segment {
+  start: number;
+  end: number;
+  speaker: string;
+  text: string;
+}
+
 export interface TranscriptionResult {
+  segments: Segment[];
+  /** Texto plano derivado de los segmentos. */
   text: string;
   duration: number;
   /** Tiempo real que tardó el proceso completo, en milisegundos. */
