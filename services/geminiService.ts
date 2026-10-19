@@ -1,14 +1,34 @@
-import { GoogleGenAI, createUserContent, createPartFromUri } from "@google/genai";
+import { GoogleGenAI, FinishReason, createUserContent, createPartFromUri } from "@google/genai";
 
-// Gemini limita las peticiones con datos "inline" (base64 incrustado) a ~20 MB.
-// Por encima de eso hay que usar la Files API. Dejamos un margen de seguridad.
-const INLINE_LIMIT_BYTES = 18 * 1024 * 1024; // 18 MB
+// Gemini limita cada petición con datos "inline" a ~20 MB en total. El base64 infla
+// el audio un 33%, así que por encima de ~14 MB de WAV hay que usar la Files API.
+const INLINE_LIMIT_BYTES = 14 * 1024 * 1024; // 14 MB
 
-const PROMPT =
-  "Transcripción detallada de este audio. Por favor, detecta el idioma automáticamente y devuelve solo el texto transcrito. Si hay varios hablantes, intenta separarlos por etiquetas como [Speaker 1]: ... [Speaker 2]: ...";
+const MODEL = 'gemini-3-flash-preview';
 
-export async function transcribeAudio(audioBlob: Blob, apiKey: string): Promise<string> {
-  // Inicializamos con la clave proporcionada por el usuario o la de sistema
+// Marcador que el modelo debe devolver cuando no hay voz que transcribir.
+const NO_SPEECH_MARKER = '[SIN VOZ DETECTABLE]';
+
+// Ritmo de habla muy rápido (~250 palabras/min) más margen. Si el texto supera este
+// ritmo para la duración del audio, el modelo casi seguro inventó contenido.
+const MAX_WORDS_PER_MINUTE = 320;
+
+const SYSTEM_INSTRUCTION = `Eres un transcriptor profesional. Tu única tarea es convertir a texto el audio que recibes.
+
+Reglas obligatorias:
+1. Transcribe de forma literal y completa lo que se dice, en el idioma original del audio. No traduzcas, no resumas, no corrijas el contenido y no agregues comentarios.
+2. Nunca inventes contenido. Si una parte no se entiende, escribe [inaudible] en ese punto.
+3. Si en el audio no hay voz humana (solo silencio, música o ruido), responde exactamente: ${NO_SPEECH_MARKER}
+4. Devuelve solo texto plano. Prohibido usar HTML, Markdown, títulos, listas o viñetas.
+5. Si hay más de una voz, empieza cada intervención en una línea nueva con la etiqueta [Orador 1]:, [Orador 2]:, etc. Si solo habla una persona, no uses etiquetas.
+6. Separa en párrafos cuando haya pausas o cambios de tema.`;
+
+const USER_PROMPT = 'Transcribe este audio siguiendo las reglas.';
+
+const HTML_TAG_RE = /<\/?(p|h[1-6]|ol|ul|li|div|span|br|strong|em|article|section)\b[^>]*>/i;
+const MARKDOWN_RE = /(^#{1,6}\s)|(\*\*[^*\n]+\*\*)|(^```)/m;
+
+export async function transcribeAudio(audioBlob: Blob, duration: number, apiKey: string): Promise<string> {
   const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY || '' });
 
   let contents: any;
@@ -16,12 +36,10 @@ export async function transcribeAudio(audioBlob: Blob, apiKey: string): Promise<
   if (audioBlob.size <= INLINE_LIMIT_BYTES) {
     // Archivo pequeño: lo enviamos incrustado (más rápido, una sola petición).
     const base64 = await blobToBase64(audioBlob);
-    contents = {
-      parts: [
-        { inlineData: { mimeType: 'audio/wav', data: base64 } },
-        { text: PROMPT },
-      ],
-    };
+    contents = createUserContent([
+      { inlineData: { mimeType: 'audio/wav', data: base64 } },
+      USER_PROMPT,
+    ]);
   } else {
     // Archivo grande: lo subimos por la Files API (soporta hasta ~2 GB).
     let uploaded = await ai.files.upload({
@@ -41,19 +59,59 @@ export async function transcribeAudio(audioBlob: Blob, apiKey: string): Promise<
 
     contents = createUserContent([
       createPartFromUri(uploaded.uri as string, uploaded.mimeType as string),
-      PROMPT,
+      USER_PROMPT,
     ]);
   }
 
+  // Sin temperature: los modelos Gemini 3 están pensados para su valor por defecto,
+  // y bajarlo puede provocar bucles o respuestas inventadas.
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: MODEL,
     contents,
-    config: {
-      temperature: 0.1,
-    },
+    config: { systemInstruction: SYSTEM_INSTRUCTION },
   });
 
-  return response.text || "No se pudo generar la transcripción.";
+  if (response.promptFeedback?.blockReason) {
+    throw new Error('Gemini bloqueó el archivo y no lo transcribió. Prueba con otro archivo.');
+  }
+
+  const finishReason = response.candidates?.[0]?.finishReason;
+  if (finishReason === FinishReason.MAX_TOKENS) {
+    throw new Error('La transcripción quedó incompleta porque el audio es demasiado largo. Divide el archivo en partes más cortas.');
+  }
+  if (finishReason && finishReason !== FinishReason.STOP) {
+    throw new Error(`Gemini detuvo la transcripción antes de terminar (${finishReason}). Intenta de nuevo.`);
+  }
+
+  return validateTranscript(response.text || '', duration);
+}
+
+/**
+ * Revisa que el texto parezca una transcripción real y no contenido inventado.
+ * Lanza un error con un mensaje claro si algo no cuadra.
+ */
+function validateTranscript(raw: string, duration: number): string {
+  const text = raw.trim();
+
+  if (!text) {
+    throw new Error('Gemini no devolvió ningún texto. Intenta de nuevo.');
+  }
+
+  if (text.includes(NO_SPEECH_MARKER)) {
+    throw new Error('No se detectó voz en el archivo. Revisa que el audio tenga a alguien hablando.');
+  }
+
+  if (HTML_TAG_RE.test(text) || MARKDOWN_RE.test(text)) {
+    throw new Error('La respuesta no parece una transcripción (llegó con formato de artículo). Intenta de nuevo; si se repite, el audio puede no tener voz clara.');
+  }
+
+  const words = text.split(/\s+/).filter(Boolean).length;
+  const maxWords = Math.ceil((duration / 60) * MAX_WORDS_PER_MINUTE) + 50;
+  if (duration > 0 && words > maxWords) {
+    throw new Error('La respuesta tiene mucho más texto del que cabe en la duración del audio, así que probablemente no es una transcripción real. Intenta de nuevo.');
+  }
+
+  return text;
 }
 
 function blobToBase64(blob: Blob): Promise<string> {

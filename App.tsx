@@ -164,21 +164,20 @@ export default function App() {
       return;
     }
 
+    setStatus(AppStatus.EXTRACTING_AUDIO);
+    setError(null);
+    setProgress(15);
+
+    const progressInterval = setInterval(() => {
+      setProgress(prev => (prev < 90 ? prev + 5 : prev));
+    }, 800);
+
     try {
-      setStatus(AppStatus.EXTRACTING_AUDIO);
-      setError(null);
-      setProgress(15);
-
-      const progressInterval = setInterval(() => {
-        setProgress(prev => (prev < 90 ? prev + 5 : prev));
-      }, 800);
-
       const { blob, duration } = await extractAudioFromVideo(file);
 
       setStatus(AppStatus.TRANSCRIBING);
-      const text = await transcribeAudio(blob, apiKey);
+      const text = await transcribeAudio(blob, duration, apiKey);
 
-      clearInterval(progressInterval);
       setProgress(100);
 
       setResult({ text, duration });
@@ -187,6 +186,8 @@ export default function App() {
       console.error(err);
       setError(err.message || "No se pudo procesar el vídeo. Verifica que tu API Key sea válida.");
       setStatus(AppStatus.ERROR);
+    } finally {
+      clearInterval(progressInterval);
     }
   };
 
